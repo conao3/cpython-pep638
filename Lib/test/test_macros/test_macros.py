@@ -2,6 +2,7 @@ import ast
 import symtable
 import textwrap
 import unittest
+from test.support import os_helper
 
 PRELUDE = "".join(
     f"from! test.test_macros.macrolib import {name}\n"
@@ -224,6 +225,21 @@ class ErrorTests(unittest.TestCase):
 
     def test_bad_result(self):
         self.assertCompileError("x = bad_result!()\n", "returned Pass")
+
+    def test_error_in_file(self):
+        self.addCleanup(os_helper.unlink, os_helper.TESTFN)
+        for line in ("y = nope!(1)\n", "try_!:\n"):
+            source = PRELUDE + "x = 1\n" + line + "    pass\n" * line.endswith(":\n")
+            with open(os_helper.TESTFN, "w") as f:
+                f.write(source)
+            with self.subTest(line=line):
+                try:
+                    compile(source, os_helper.TESTFN, "exec")
+                except SyntaxError as exc:
+                    self.assertEqual(exc.text, line)
+                    self.assertIsNone(exc.__traceback__.tb_next)
+                else:
+                    self.fail("SyntaxError not raised")
 
 
 if __name__ == "__main__":

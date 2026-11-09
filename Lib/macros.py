@@ -8,6 +8,7 @@ usually built with the :func:`macro_processor` decorator. The compiler calls
 
 import ast
 import importlib
+import linecache
 from collections import ChainMap
 
 __all__ = ["STMT_MACRO", "SIBLING_MACRO", "EXPR_MACRO", "macro_processor"]
@@ -44,9 +45,14 @@ class _Expander:
 
     def error(self, message, node):
         return SyntaxError(message, (self.filename, node.lineno,
-                                     node.col_offset + 1, None,
+                                     node.col_offset + 1,
+                                     self.source_line(node.lineno),
                                      node.end_lineno,
                                      node.end_col_offset + 1))
+
+    def source_line(self, lineno):
+        linecache.checkcache(self.filename)
+        return linecache.getline(self.filename, lineno) or None
 
     def processor(self, value, name, node):
         if not (isinstance(value, tuple) and len(value) == 4):
@@ -124,6 +130,7 @@ class _Expander:
                 exc.filename = self.filename
                 exc.lineno = node.lineno
                 exc.offset = node.col_offset + 1
+                exc.text = self.source_line(node.lineno)
             raise
 
     def locate(self, result, node):

@@ -1558,6 +1558,11 @@ _PyCompile_ExpandMacros(mod_ty mod, PyObject *filename, PyArena *arena)
     Py_DECREF(expanded);
     Py_DECREF(tree);
     if (result == NULL) {
+        if (PyErr_ExceptionMatches(PyExc_SyntaxError)) {
+            PyObject *exc = PyErr_GetRaisedException();
+            PyException_SetTraceback(exc, Py_None);
+            PyErr_SetRaisedException(exc);
+        }
         return NULL;
     }
     mod_ty res = PyAST_obj2mod(result, arena, mode);
