@@ -35,6 +35,13 @@ PyAPI_FUNC(PyCodeObject*) _PyAST_Compile(
     struct _arena *arena,
     PyObject *module);
 
+/* PEP 638: replace macros in the tree by their expansion, computed by
+   macros._expand(). Return the tree unchanged when it has no macros. */
+extern struct _mod *_PyCompile_ExpandMacros(
+    struct _mod *mod,
+    PyObject *filename,
+    struct _arena *arena);
+
 /* AST preprocessing */
 extern int _PyCompile_AstPreprocess(
     struct _mod *mod,
@@ -112,6 +119,7 @@ enum _PyCompile_FBlockType {
      COMPILE_FBLOCK_ASYNC_COMPREHENSION_GENERATOR,
      COMPILE_FBLOCK_INLINED_COMPREHENSION,
      COMPILE_FBLOCK_STOP_ITERATION,
+     COMPILE_FBLOCK_STMT_EXPR,
 };
 
 typedef struct {

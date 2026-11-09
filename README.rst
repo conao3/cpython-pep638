@@ -1,235 +1,198 @@
-This is Python version 3.15.2
-=============================
+cpython-pep638: CPython 3.15.2 with PEP 638 syntactic macros
+==============================================================
 
-.. image:: https://github.com/python/cpython/actions/workflows/build.yml/badge.svg?branch=main&event=push
-   :alt: CPython build status on GitHub Actions
-   :target: https://github.com/python/cpython/actions
+This repository is CPython 3.15.2 with an implementation of
+`PEP 638 – Syntactic Macros <https://peps.python.org/pep-0638/>`_
+built into the parser, the AST and the compiler.
 
-.. image:: https://dev.azure.com/python/cpython/_apis/build/status/Azure%20Pipelines%20CI?branchName=main
-   :alt: CPython build status on Azure DevOps
-   :target: https://dev.azure.com/python/cpython/_build/latest?definitionId=4&branchName=main
-
-.. image:: https://img.shields.io/badge/discourse-join_chat-brightgreen.svg
-   :alt: Python Discourse chat
-   :target: https://discuss.python.org/
-
-
-Copyright © 2001 Python Software Foundation.  All rights reserved.
-
-See the end of this file for further copyright and license information.
+It tracks the ``v3.15.2`` tag of `python/cpython
+<https://github.com/python/cpython>`_. It is an experiment and is not part of,
+or endorsed by, the CPython project or the Python Software Foundation.
 
 .. contents::
 
-General Information
--------------------
-
-- Website: https://www.python.org
-- Source code: https://github.com/python/cpython
-- Issue tracker: https://github.com/python/cpython/issues
-- Documentation: https://docs.python.org
-- Developer's Guide: https://devguide.python.org/
-
-Contributing to CPython
------------------------
-
-For more complete instructions on contributing to CPython development,
-see the `Developer Guide`_.
-
-.. _Developer Guide: https://devguide.python.org/
-
-Using Python
-------------
-
-Installable Python kits, and information about using Python, are available at
-`python.org`_.
-
-.. _python.org: https://www.python.org/
-
-Build Instructions
-------------------
-
-On Unix, Linux, BSD, macOS, and Cygwin::
-
-    ./configure
-    make
-    make test
-    sudo make install
-
-This will install Python as ``python3``.
-
-You can pass many options to the configure script; run ``./configure --help``
-to find out more.  On macOS case-insensitive file systems and on Cygwin,
-the executable is called ``python.exe``; elsewhere it's just ``python``.
-
-Building a complete Python installation requires the use of various
-additional third-party libraries, depending on your build platform and
-configure options.  Not all standard library modules are buildable or
-usable on all platforms.  Refer to the
-`Install dependencies <https://devguide.python.org/getting-started/setup-building.html#build-dependencies>`_
-section of the `Developer Guide`_ for current detailed information on
-dependencies for various Linux distributions and macOS.
-
-On macOS, there are additional configure and build options related
-to macOS framework and universal builds.  Refer to `Mac/README.rst
-<https://github.com/python/cpython/blob/main/Mac/README.rst>`_.
-
-On Windows, see `PCbuild/readme.txt
-<https://github.com/python/cpython/blob/main/PCbuild/readme.txt>`_.
-
-To build Windows installer, see `Tools/msi/README.txt
-<https://github.com/python/cpython/blob/main/Tools/msi/README.txt>`_.
-
-If you wish, you can create a subdirectory and invoke configure from there.
-For example::
-
-    mkdir debug
-    cd debug
-    ../configure --with-pydebug
-    make
-    make test
-
-(This will fail if you *also* built at the top-level directory.  You should do
-a ``make clean`` at the top-level first.)
-
-To get an optimized build of Python, ``configure --enable-optimizations``
-before you run ``make``.  This sets the default make targets up to enable
-Profile Guided Optimization (PGO) and may be used to auto-enable Link Time
-Optimization (LTO) on some platforms.  For more details, see the sections
-below.
-
-Profile Guided Optimization
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-PGO takes advantage of recent versions of the GCC or Clang compilers.  If used,
-either via ``configure --enable-optimizations`` or by manually running
-``make profile-opt`` regardless of configure flags, the optimized build
-process will perform the following steps:
-
-The entire Python directory is cleaned of temporary files that may have
-resulted from a previous compilation.
-
-An instrumented version of the interpreter is built, using suitable compiler
-flags for each flavor. Note that this is just an intermediary step.  The
-binary resulting from this step is not good for real-life workloads as it has
-profiling instructions embedded inside.
-
-After the instrumented interpreter is built, the Makefile will run a training
-workload.  This is necessary in order to profile the interpreter's execution.
-Note also that any output, both stdout and stderr, that may appear at this step
-is suppressed.
-
-The final step is to build the actual interpreter, using the information
-collected from the instrumented one.  The end result will be a Python binary
-that is optimized; suitable for distribution or production installation.
-
-
-Link Time Optimization
-^^^^^^^^^^^^^^^^^^^^^^
-
-Enabled via configure's ``--with-lto`` flag.  LTO takes advantage of the
-ability of recent compiler toolchains to optimize across the otherwise
-arbitrary ``.o`` file boundary when building final executables or shared
-libraries for additional performance gains.
-
-
-What's New
-----------
-
-We have a comprehensive overview of the changes in the `What's new in Python
-3.15 <https://docs.python.org/3.15/whatsnew/3.15.html>`_ document.  For a more
-detailed change log, read `Misc/NEWS
-<https://github.com/python/cpython/tree/main/Misc/NEWS.d>`_, but a full
-accounting of changes can only be gleaned from the `commit history
-<https://github.com/python/cpython/commits/main>`_.
-
-If you want to install multiple versions of Python, see the section below
-entitled "Installing multiple versions".
-
-
-Documentation
--------------
-
-`Documentation for Python 3.15 <https://docs.python.org/3.15/>`_ is online,
-updated daily.
-
-It can also be downloaded in many formats for faster access.  The documentation
-is downloadable in HTML, EPUB, and reStructuredText formats; the latter version
-is primarily for documentation authors, translators, and people with special
-formatting requirements.
-
-For information about building Python's documentation, refer to `Doc/README.rst
-<https://github.com/python/cpython/blob/main/Doc/README.rst>`_.
-
-
-Testing
+Example
 -------
 
-To test the interpreter, type ``make test`` in the top-level directory.  The
-test set produces some output.  You can generally ignore the messages about
-skipped tests due to optional features which can't be imported.  If a message
-is printed about a failed test or a traceback or core dump is produced,
-something is wrong.
+``mymacros.py`` defines the macro processors::
 
-By default, tests are prevented from overusing resources like disk space and
-memory.  To enable these tests, run ``make buildbottest``.
+    import ast
+    import macros
 
-If any tests fail, you can re-run the failing test(s) in verbose mode.  For
-example, if ``test_os`` and ``test_gdb`` failed, you can run::
+    @macros.macro_processor(macros.STMT_MACRO, 1, "finally")
+    def try_(node, finally_):
+        return ast.Try(body=node.body, handlers=[], orelse=[],
+                       finalbody=finally_.body)
 
-    make test TESTOPTS="-v test_os test_gdb"
+    @macros.macro_processor(macros.EXPR_MACRO, 1)
+    def quote(node):
+        return ast.Constant(ast.unparse(node.args[0]))
 
-If the failure persists and appears to be a problem with Python rather than
-your environment, you can `file a bug report
-<https://github.com/python/cpython/issues>`_ and include relevant output from
-that command to show the issue.
+``main.py`` uses them::
 
-See `Running & Writing Tests <https://devguide.python.org/testing/run-write-tests.html>`_
-for more on running tests.
+    from! mymacros import try_
+    from! mymacros import quote
 
-Installing multiple versions
-----------------------------
+    def read(log):
+        try_!:
+            return quote!(a + b * c)
+        finally!:
+            log.append("closed")
 
-On Unix and Mac systems if you intend to install multiple versions of Python
-using the same installation prefix (``--prefix`` argument to the configure
-script) you must take care that your primary python executable is not
-overwritten by the installation of a different version.  All files and
-directories installed using ``make altinstall`` contain the major and minor
-version and can thus live side-by-side.  ``make install`` also creates
-``${prefix}/bin/python3`` which refers to ``${prefix}/bin/python3.X``.  If you
-intend to install multiple versions using the same prefix you must decide which
-version (if any) is your "primary" version.  Install that version using
-``make install``.  Install all other versions using ``make altinstall``.
+    log = []
+    print(read(log), log)    # a + b * c ['closed']
 
-For example, if you want to install Python 2.7, 3.6, and 3.15 with 3.15 being the
-primary version, you would execute ``make install`` in your 3.15 build directory
-and ``make altinstall`` in the others.
+Run it with the interpreter built from this repository: ``./python main.py``.
 
+Syntax
+------
 
-Release Schedule
+A macro name is an identifier immediately followed by ``!``, with no space
+between them. Keywords followed by ``!`` are macro names too, so ``import!``,
+``from!``, ``with!`` and ``finally!`` are valid.
+
+Statement form::
+
+    name! [args] [import NAME] [as NAME] [: NEWLINE INDENT body DEDENT]
+
+Expression form::
+
+    name!(args)
+
+``args`` is a comma-separated list of expressions. At the start of a statement
+the statement form wins, so ``name!(x)`` on its own line is a statement macro.
+A statement macro without an indented block may end with ``:``; the colon is
+ignored.
+
+Inside f-strings and t-strings, ``!`` keeps its meaning as the conversion
+marker (``f"{x!r}"``).
+
+Macro processors
 ----------------
 
-See `PEP 790 <https://peps.python.org/pep-0790/>`__ for Python 3.15 release details.
+A macro processor is a ``(func, kind, version, additional_names)`` tuple,
+usually made with the ``macros.macro_processor(kind, version,
+*additional_names)`` decorator.
 
+``kind`` is one of:
 
-Copyright and License Information
----------------------------------
+``macros.STMT_MACRO``
+    A statement macro. ``func`` receives the ``ast.MacroStmt`` node, whose
+    ``body`` holds the indented block (empty when there is none). It may
+    declare ``additional_names``: the ``name!:`` parts that directly follow it
+    in the same block (``try_!`` + ``finally!``) are passed as extra
+    arguments, in the order of ``additional_names``, or ``None`` when a part
+    is absent.
+``macros.SIBLING_MACRO``
+    A statement macro without an indented block. The next statement of the
+    same block becomes its ``body``.
+``macros.EXPR_MACRO``
+    An expression macro. ``func`` receives the ``ast.MacroExpr`` node.
 
+A statement macro returns a statement, a list of statements, or ``None``. An
+expression macro returns an expression. Nodes without a location get the
+location of the macro. A ``SyntaxError`` raised by ``func`` without a location
+is reported at the macro.
 
-Copyright © 2001 Python Software Foundation.  All rights reserved.
+``import! dotted.name as name`` and ``from! dotted.name import name [as name]``
+import a macro processor at compile time and register it for the current
+scope and the scopes nested in it. Every macro has to be imported before it is
+used.
 
-Copyright © 2000 BeOpen.com.  All rights reserved.
+Expansion
+---------
 
-Copyright © 1995-2001 Corporation for National Research Initiatives.  All
-rights reserved.
+Before a tree is compiled, the compiler checks whether it contains macros and,
+if so, passes it to ``macros._expand()``. Expansion works from the outside in:
+a processor receives the unexpanded tree of its macro, so inner macros such as
+``case!`` in a ``switch!`` need no processor of their own. Whatever a
+processor returns is expanded again.
 
-Copyright © 1991-1995 Stichting Mathematisch Centrum.  All rights reserved.
+``ast.parse()`` and ``compile(..., ast.PyCF_ONLY_AST)`` return the unexpanded
+tree. ``compile()`` of a source string or of an AST object, ``exec()``,
+``eval()``, imports and ``symtable.symtable()`` expand macros.
 
-See the `LICENSE <https://github.com/python/cpython/blob/main/LICENSE>`_ for
-information on the history of this software, terms & conditions for usage, and a
-DISCLAIMER OF ALL WARRANTIES.
+AST nodes
+---------
 
-This Python distribution contains *no* GNU General Public License (GPL) code,
-so it may be used in proprietary projects.  There are interfaces to some GNU
-code but these are entirely optional.
+``ast.MacroStmt(name, args, importname, asname, body)``
+    A statement macro. ``importname`` and ``asname`` are ``None`` when the
+    clause is absent.
+``ast.MacroExpr(name, args)``
+    An expression macro.
+``ast.StmtExpr(stmt, value)``
+    An expression that executes ``stmt`` and then evaluates to ``value``. It is
+    compiled directly to bytecode, so it keeps Python's evaluation order in
+    any position (the right operand of ``or``, a comprehension, a conditional
+    expression). A ``break``, ``continue`` or ``return`` in ``stmt`` that would
+    leave the ``StmtExpr`` is a ``SyntaxError``.
 
-All trademarks referenced herein are property of their respective holders.
+``ast.unparse()`` writes ``MacroStmt`` and ``MacroExpr`` back in macro syntax.
+``StmtExpr`` has no source form and makes ``ast.unparse()`` raise
+``ValueError``.
+
+The names recommended by the PEP for hygiene (``$$switch_4_0``, ``$x_12_5``)
+can be used for generated variables; the compiler accepts them in the AST.
+
+Differences from PEP 638
+------------------------
+
+- The AST classes follow CPython's naming: ``ast.MacroStmt``,
+  ``ast.MacroExpr`` and ``ast.StmtExpr`` instead of ``macro_stmt``,
+  ``macro_expr`` and ``stmt_expr``.
+- The body of a statement macro is parsed with Python's statement grammar. A
+  body such as ``"red" = 1`` from the PEP's ``bijection!`` example is a syntax
+  error.
+- ``tokenize`` reports a macro name as a ``NAME`` token followed by an ``OP``
+  token ``!``; there is no ``MACRO_NAME`` token type.
+- The processor's ``version`` is validated, but cached bytecode is not
+  invalidated when a processor changes.
+
+Building
+--------
+
+Build it like CPython::
+
+    ./configure --with-pydebug
+    make -j
+
+On Nix, ``nix develop nixpkgs#python315`` provides the build dependencies.
+
+After editing ``Parser/Python.asdl`` or ``Grammar/python.gram``, regenerate
+the AST and the parser with ``make regen-ast regen-pegen``.
+
+Tests
+-----
+
+The tests for macros are in ``Lib/test/test_macros``::
+
+    ./python -m test test_macros
+
+The whole test suite runs with ``./python -m test -j0``.
+
+Where the implementation lives
+------------------------------
+
+``Grammar/python.gram``
+    The ``macro_stmt``, ``macro_expr`` and ``invalid_macro_expr`` rules.
+``Parser/pegen.c``
+    Keeps a keyword followed by ``!`` as a ``NAME`` token.
+``Parser/Python.asdl`` and ``Parser/asdl_c.py``
+    The new AST nodes, and the generated ``_PyAST_HasMacros()``.
+``Python/compile.c``
+    ``_PyCompile_ExpandMacros()``, called before a tree is compiled.
+``Lib/macros.py``
+    The ``macros`` module and the expander.
+``Python/codegen.c``
+    Bytecode for ``StmtExpr``.
+``Python/ast.c``, ``Python/ast_preprocess.c``, ``Python/symtable.c``, ``Python/ast_unparse.c``, ``Lib/_ast_unparse.py``
+    Validation, preprocessing, symbol tables and unparsing of the new nodes.
+
+License
+-------
+
+This is a derivative of CPython and is distributed under the same license, the
+Python Software Foundation License Version 2. See ``LICENSE`` for the full
+text.
+
+Copyright © 2001 Python Software Foundation. All rights reserved.

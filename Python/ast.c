@@ -397,6 +397,14 @@ validate_expr(expr_ty exp, expr_context_ty ctx)
         }
         ret = validate_expr(exp->v.NamedExpr.value, Load);
         break;
+    case MacroExpr_kind:
+        ret = validate_name(exp->v.MacroExpr.name) &&
+            validate_exprs(exp->v.MacroExpr.args, Load, 0);
+        break;
+    case StmtExpr_kind:
+        ret = validate_stmt(exp->v.StmtExpr.stmt) &&
+            validate_expr(exp->v.StmtExpr.value, Load);
+        break;
     /* This last case doesn't have any checking. */
     case Name_kind:
         ret = 1;
@@ -963,6 +971,15 @@ validate_stmt(stmt_ty stmt)
     case Break_kind:
     case Continue_kind:
         ret = 1;
+        break;
+    case MacroStmt_kind:
+        ret = validate_name(stmt->v.MacroStmt.name) &&
+            (!stmt->v.MacroStmt.importname ||
+             validate_name(stmt->v.MacroStmt.importname)) &&
+            (!stmt->v.MacroStmt.asname ||
+             validate_name(stmt->v.MacroStmt.asname)) &&
+            validate_exprs(stmt->v.MacroStmt.args, Load, 0) &&
+            validate_stmts(stmt->v.MacroStmt.body);
         break;
     // No default case so compiler emits warning for unhandled cases
     }

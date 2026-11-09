@@ -2132,3 +2132,14 @@ _PyPegen_register_stmts(Parser *p, asdl_stmt_seq* stmts) {
     p->last_stmt_location.end_col_offset = last_stmt->end_col_offset;
     return stmts;
 }
+
+/* PEP 638: a macro name is an identifier immediately followed by '!' */
+PyObject *
+_PyPegen_macro_name(Parser *p, expr_ty name, Token *bang)
+{
+    if (bang->lineno != name->end_lineno ||
+        bang->col_offset != name->end_col_offset) {
+        return NULL;
+    }
+    return name->v.Name.id;
+}

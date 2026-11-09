@@ -546,6 +546,7 @@ codegen_unwind_fblock(compiler *c, location *ploc,
         case COMPILE_FBLOCK_ASYNC_COMPREHENSION_GENERATOR:
         case COMPILE_FBLOCK_INLINED_COMPREHENSION:
         case COMPILE_FBLOCK_STOP_ITERATION:
+        case COMPILE_FBLOCK_STMT_EXPR:
             return SUCCESS;
 
         case COMPILE_FBLOCK_FOR_LOOP:
@@ -661,6 +662,10 @@ codegen_unwind_fblock_stack(compiler *c, location *ploc,
     if (top->fb_type == COMPILE_FBLOCK_EXCEPTION_GROUP_HANDLER) {
         return _PyCompile_Error(
             c, *ploc, "'break', 'continue' and 'return' cannot appear in an except* block");
+    }
+    if (top->fb_type == COMPILE_FBLOCK_STMT_EXPR) {
+        return _PyCompile_Error(
+            c, *ploc, "'break', 'continue' and 'return' cannot leave a statement expression");
     }
     if (loop != NULL && (top->fb_type == COMPILE_FBLOCK_WHILE_LOOP ||
                          top->fb_type == COMPILE_FBLOCK_FOR_LOOP ||
@@ -3187,6 +3192,9 @@ codegen_visit_stmt(compiler *c, stmt_ty s)
     {
         return codegen_continue(c, LOC(s));
     }
+    case MacroStmt_kind:
+        return _PyCompile_Error(c, LOC(s), "macro %U! was not expanded",
+                                s->v.MacroStmt.name);
     case With_kind:
         CODEGEN_COND_BLOCK(codegen_with, c, s);
         break;
@@ -5554,6 +5562,16 @@ codegen_visit_expr(compiler *c, expr_ty e)
         return codegen_list(c, e);
     case Tuple_kind:
         return codegen_tuple(c, e);
+    case MacroExpr_kind:
+        return _PyCompile_Error(c, loc, "macro %U! was not expanded",
+                                e->v.MacroExpr.name);
+    case StmtExpr_kind:
+        RETURN_IF_ERROR(_PyCompile_PushFBlock(c, loc, COMPILE_FBLOCK_STMT_EXPR,
+                                              NO_LABEL, NO_LABEL, NULL));
+        VISIT(c, stmt, e->v.StmtExpr.stmt);
+        _PyCompile_PopFBlock(c, COMPILE_FBLOCK_STMT_EXPR, NO_LABEL);
+        VISIT(c, expr, e->v.StmtExpr.value);
+        break;
     }
     return SUCCESS;
 }

@@ -2776,6 +2776,7 @@ TESTSUBDIRS=	idlelib/idle_test \
 		test/test_lazy_import/data/module_same_name_var_order1 \
 		test/test_lazy_import/data/module_same_name_var_order2 \
 		test/test_lazy_import/data/versioned \
+		test/test_macros \
 		test/test_module \
 		test/test_multiprocessing_fork \
 		test/test_multiprocessing_forkserver \

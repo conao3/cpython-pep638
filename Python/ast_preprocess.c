@@ -635,6 +635,13 @@ astfold_expr(expr_ty node_, PyArena *ctx_, _PyASTPreprocessState *state)
     case Constant_kind:
         // Already a constant, nothing further to do
         break;
+    case StmtExpr_kind:
+        CALL(astfold_stmt, stmt_ty, node_->v.StmtExpr.stmt);
+        CALL(astfold_expr, expr_ty, node_->v.StmtExpr.value);
+        break;
+    // Macros are expanded before the AST is preprocessed
+    case MacroExpr_kind:
+        break;
     // No default case, so the compiler will emit a warning if new expression
     // kinds are added without being handled here
     }
@@ -827,6 +834,9 @@ astfold_stmt(stmt_ty node_, PyArena *ctx_, _PyASTPreprocessState *state)
     case Global_kind:
     case Nonlocal_kind:
     case Pass_kind:
+        break;
+    // Macros are expanded before the AST is preprocessed
+    case MacroStmt_kind:
         break;
     // No default case, so the compiler will emit a warning if new statement
     // kinds are added without being handled here

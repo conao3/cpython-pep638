@@ -192,7 +192,7 @@ enum _stmt_kind {FunctionDef_kind=1, AsyncFunctionDef_kind=2, ClassDef_kind=3,
                   Raise_kind=17, Try_kind=18, TryStar_kind=19, Assert_kind=20,
                   Import_kind=21, ImportFrom_kind=22, Global_kind=23,
                   Nonlocal_kind=24, Expr_kind=25, Pass_kind=26, Break_kind=27,
-                  Continue_kind=28};
+                  Continue_kind=28, MacroStmt_kind=29};
 struct _stmt {
     enum _stmt_kind kind;
     union {
@@ -351,6 +351,14 @@ struct _stmt {
             expr_ty value;
         } Expr;
 
+        struct {
+            identifier name;
+            asdl_expr_seq *args;
+            identifier importname;
+            identifier asname;
+            asdl_stmt_seq *body;
+        } MacroStmt;
+
     } v;
     int lineno;
     int col_offset;
@@ -366,7 +374,8 @@ enum _expr_kind {BoolOp_kind=1, NamedExpr_kind=2, BinOp_kind=3, UnaryOp_kind=4,
                   FormattedValue_kind=18, Interpolation_kind=19,
                   JoinedStr_kind=20, TemplateStr_kind=21, Constant_kind=22,
                   Attribute_kind=23, Subscript_kind=24, Starred_kind=25,
-                  Name_kind=26, List_kind=27, Tuple_kind=28, Slice_kind=29};
+                  Name_kind=26, List_kind=27, Tuple_kind=28, Slice_kind=29,
+                  MacroExpr_kind=30, StmtExpr_kind=31};
 struct _expr {
     enum _expr_kind kind;
     union {
@@ -519,6 +528,16 @@ struct _expr {
             expr_ty upper;
             expr_ty step;
         } Slice;
+
+        struct {
+            identifier name;
+            asdl_expr_seq *args;
+        } MacroExpr;
+
+        struct {
+            stmt_ty stmt;
+            expr_ty value;
+        } StmtExpr;
 
     } v;
     int lineno;
@@ -785,6 +804,10 @@ stmt_ty _PyAST_Break(int lineno, int col_offset, int end_lineno, int
                      end_col_offset, PyArena *arena);
 stmt_ty _PyAST_Continue(int lineno, int col_offset, int end_lineno, int
                         end_col_offset, PyArena *arena);
+stmt_ty _PyAST_MacroStmt(identifier name, asdl_expr_seq * args, identifier
+                         importname, identifier asname, asdl_stmt_seq * body,
+                         int lineno, int col_offset, int end_lineno, int
+                         end_col_offset, PyArena *arena);
 expr_ty _PyAST_BoolOp(boolop_ty op, asdl_expr_seq * values, int lineno, int
                       col_offset, int end_lineno, int end_col_offset, PyArena
                       *arena);
@@ -867,6 +890,12 @@ expr_ty _PyAST_Tuple(asdl_expr_seq * elts, expr_context_ty ctx, int lineno, int
 expr_ty _PyAST_Slice(expr_ty lower, expr_ty upper, expr_ty step, int lineno,
                      int col_offset, int end_lineno, int end_col_offset,
                      PyArena *arena);
+expr_ty _PyAST_MacroExpr(identifier name, asdl_expr_seq * args, int lineno, int
+                         col_offset, int end_lineno, int end_col_offset,
+                         PyArena *arena);
+expr_ty _PyAST_StmtExpr(stmt_ty stmt, expr_ty value, int lineno, int
+                        col_offset, int end_lineno, int end_col_offset, PyArena
+                        *arena);
 comprehension_ty _PyAST_comprehension(expr_ty target, expr_ty iter,
                                       asdl_expr_seq * ifs, int is_async,
                                       PyArena *arena);
@@ -933,6 +962,9 @@ mod_ty PyAST_obj2mod(PyObject* ast, PyArena* arena, int mode);
 int PyAST_Check(PyObject* obj);
 
 extern int _PyAST_Validate(mod_ty);
+
+/* Return 1 if the tree contains MacroStmt or MacroExpr nodes (PEP 638). */
+extern int _PyAST_HasMacros(mod_ty);
 
 /* _PyAST_ExprAsUnicode is defined in ast_unparse.c */
 extern PyObject* _PyAST_ExprAsUnicode(expr_ty);

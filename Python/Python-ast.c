@@ -111,6 +111,8 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->LtE_type);
     Py_CLEAR(state->Lt_singleton);
     Py_CLEAR(state->Lt_type);
+    Py_CLEAR(state->MacroExpr_type);
+    Py_CLEAR(state->MacroStmt_type);
     Py_CLEAR(state->MatMult_singleton);
     Py_CLEAR(state->MatMult_type);
     Py_CLEAR(state->MatchAs_type);
@@ -150,6 +152,7 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->Set_type);
     Py_CLEAR(state->Slice_type);
     Py_CLEAR(state->Starred_type);
+    Py_CLEAR(state->StmtExpr_type);
     Py_CLEAR(state->Store_singleton);
     Py_CLEAR(state->Store_type);
     Py_CLEAR(state->Sub_singleton);
@@ -222,6 +225,7 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->handlers);
     Py_CLEAR(state->id);
     Py_CLEAR(state->ifs);
+    Py_CLEAR(state->importname);
     Py_CLEAR(state->is_async);
     Py_CLEAR(state->is_lazy);
     Py_CLEAR(state->items);
@@ -262,6 +266,7 @@ void _PyAST_Fini(PyInterpreterState *interp)
     Py_CLEAR(state->simple);
     Py_CLEAR(state->slice);
     Py_CLEAR(state->step);
+    Py_CLEAR(state->stmt);
     Py_CLEAR(state->stmt_type);
     Py_CLEAR(state->str);
     Py_CLEAR(state->subject);
@@ -328,6 +333,7 @@ static int init_identifiers(struct ast_state *state)
     if ((state->handlers = PyUnicode_InternFromString("handlers")) == NULL) return -1;
     if ((state->id = PyUnicode_InternFromString("id")) == NULL) return -1;
     if ((state->ifs = PyUnicode_InternFromString("ifs")) == NULL) return -1;
+    if ((state->importname = PyUnicode_InternFromString("importname")) == NULL) return -1;
     if ((state->is_async = PyUnicode_InternFromString("is_async")) == NULL) return -1;
     if ((state->is_lazy = PyUnicode_InternFromString("is_lazy")) == NULL) return -1;
     if ((state->items = PyUnicode_InternFromString("items")) == NULL) return -1;
@@ -363,6 +369,7 @@ static int init_identifiers(struct ast_state *state)
     if ((state->simple = PyUnicode_InternFromString("simple")) == NULL) return -1;
     if ((state->slice = PyUnicode_InternFromString("slice")) == NULL) return -1;
     if ((state->step = PyUnicode_InternFromString("step")) == NULL) return -1;
+    if ((state->stmt = PyUnicode_InternFromString("stmt")) == NULL) return -1;
     if ((state->str = PyUnicode_InternFromString("str")) == NULL) return -1;
     if ((state->subject = PyUnicode_InternFromString("subject")) == NULL) return -1;
     if ((state->tag = PyUnicode_InternFromString("tag")) == NULL) return -1;
@@ -547,6 +554,13 @@ static const char * const Nonlocal_fields[]={
 static const char * const Expr_fields[]={
     "value",
 };
+static const char * const MacroStmt_fields[]={
+    "name",
+    "args",
+    "importname",
+    "asname",
+    "body",
+};
 static const char * const expr_attributes[] = {
     "lineno",
     "col_offset",
@@ -674,6 +688,14 @@ static const char * const Slice_fields[]={
     "lower",
     "upper",
     "step",
+};
+static const char * const MacroExpr_fields[]={
+    "name",
+    "args",
+};
+static const char * const StmtExpr_fields[]={
+    "stmt",
+    "value",
 };
 static PyObject* ast2obj_expr_context(struct ast_state *state, expr_context_ty);
 static PyObject* ast2obj_boolop(struct ast_state *state, boolop_ty);
@@ -2494,6 +2516,92 @@ add_ast_annotations(struct ast_state *state)
         return 0;
     }
     Py_DECREF(Continue_annotations);
+    PyObject *MacroStmt_annotations = PyDict_New();
+    if (!MacroStmt_annotations) return 0;
+    {
+        PyObject *type = (PyObject *)&PyUnicode_Type;
+        Py_INCREF(type);
+        cond = PyDict_SetItemString(MacroStmt_annotations, "name", type) == 0;
+        Py_DECREF(type);
+        if (!cond) {
+            Py_DECREF(MacroStmt_annotations);
+            return 0;
+        }
+    }
+    {
+        PyObject *type = state->expr_type;
+        type = Py_GenericAlias((PyObject *)&PyList_Type, type);
+        cond = type != NULL;
+        if (!cond) {
+            Py_DECREF(MacroStmt_annotations);
+            return 0;
+        }
+        cond = PyDict_SetItemString(MacroStmt_annotations, "args", type) == 0;
+        Py_DECREF(type);
+        if (!cond) {
+            Py_DECREF(MacroStmt_annotations);
+            return 0;
+        }
+    }
+    {
+        PyObject *type = (PyObject *)&PyUnicode_Type;
+        type = _Py_union_type_or(type, Py_None);
+        cond = type != NULL;
+        if (!cond) {
+            Py_DECREF(MacroStmt_annotations);
+            return 0;
+        }
+        cond = PyDict_SetItemString(MacroStmt_annotations, "importname", type)
+                                    == 0;
+        Py_DECREF(type);
+        if (!cond) {
+            Py_DECREF(MacroStmt_annotations);
+            return 0;
+        }
+    }
+    {
+        PyObject *type = (PyObject *)&PyUnicode_Type;
+        type = _Py_union_type_or(type, Py_None);
+        cond = type != NULL;
+        if (!cond) {
+            Py_DECREF(MacroStmt_annotations);
+            return 0;
+        }
+        cond = PyDict_SetItemString(MacroStmt_annotations, "asname", type) == 0;
+        Py_DECREF(type);
+        if (!cond) {
+            Py_DECREF(MacroStmt_annotations);
+            return 0;
+        }
+    }
+    {
+        PyObject *type = state->stmt_type;
+        type = Py_GenericAlias((PyObject *)&PyList_Type, type);
+        cond = type != NULL;
+        if (!cond) {
+            Py_DECREF(MacroStmt_annotations);
+            return 0;
+        }
+        cond = PyDict_SetItemString(MacroStmt_annotations, "body", type) == 0;
+        Py_DECREF(type);
+        if (!cond) {
+            Py_DECREF(MacroStmt_annotations);
+            return 0;
+        }
+    }
+    cond = PyObject_SetAttrString(state->MacroStmt_type, "_field_types",
+                                  MacroStmt_annotations) == 0;
+    if (!cond) {
+        Py_DECREF(MacroStmt_annotations);
+        return 0;
+    }
+    cond = PyObject_SetAttrString(state->MacroStmt_type, "__annotations__",
+                                  MacroStmt_annotations) == 0;
+    if (!cond) {
+        Py_DECREF(MacroStmt_annotations);
+        return 0;
+    }
+    Py_DECREF(MacroStmt_annotations);
     PyObject *BoolOp_annotations = PyDict_New();
     if (!BoolOp_annotations) return 0;
     {
@@ -3693,6 +3801,81 @@ add_ast_annotations(struct ast_state *state)
         return 0;
     }
     Py_DECREF(Slice_annotations);
+    PyObject *MacroExpr_annotations = PyDict_New();
+    if (!MacroExpr_annotations) return 0;
+    {
+        PyObject *type = (PyObject *)&PyUnicode_Type;
+        Py_INCREF(type);
+        cond = PyDict_SetItemString(MacroExpr_annotations, "name", type) == 0;
+        Py_DECREF(type);
+        if (!cond) {
+            Py_DECREF(MacroExpr_annotations);
+            return 0;
+        }
+    }
+    {
+        PyObject *type = state->expr_type;
+        type = Py_GenericAlias((PyObject *)&PyList_Type, type);
+        cond = type != NULL;
+        if (!cond) {
+            Py_DECREF(MacroExpr_annotations);
+            return 0;
+        }
+        cond = PyDict_SetItemString(MacroExpr_annotations, "args", type) == 0;
+        Py_DECREF(type);
+        if (!cond) {
+            Py_DECREF(MacroExpr_annotations);
+            return 0;
+        }
+    }
+    cond = PyObject_SetAttrString(state->MacroExpr_type, "_field_types",
+                                  MacroExpr_annotations) == 0;
+    if (!cond) {
+        Py_DECREF(MacroExpr_annotations);
+        return 0;
+    }
+    cond = PyObject_SetAttrString(state->MacroExpr_type, "__annotations__",
+                                  MacroExpr_annotations) == 0;
+    if (!cond) {
+        Py_DECREF(MacroExpr_annotations);
+        return 0;
+    }
+    Py_DECREF(MacroExpr_annotations);
+    PyObject *StmtExpr_annotations = PyDict_New();
+    if (!StmtExpr_annotations) return 0;
+    {
+        PyObject *type = state->stmt_type;
+        Py_INCREF(type);
+        cond = PyDict_SetItemString(StmtExpr_annotations, "stmt", type) == 0;
+        Py_DECREF(type);
+        if (!cond) {
+            Py_DECREF(StmtExpr_annotations);
+            return 0;
+        }
+    }
+    {
+        PyObject *type = state->expr_type;
+        Py_INCREF(type);
+        cond = PyDict_SetItemString(StmtExpr_annotations, "value", type) == 0;
+        Py_DECREF(type);
+        if (!cond) {
+            Py_DECREF(StmtExpr_annotations);
+            return 0;
+        }
+    }
+    cond = PyObject_SetAttrString(state->StmtExpr_type, "_field_types",
+                                  StmtExpr_annotations) == 0;
+    if (!cond) {
+        Py_DECREF(StmtExpr_annotations);
+        return 0;
+    }
+    cond = PyObject_SetAttrString(state->StmtExpr_type, "__annotations__",
+                                  StmtExpr_annotations) == 0;
+    if (!cond) {
+        Py_DECREF(StmtExpr_annotations);
+        return 0;
+    }
+    Py_DECREF(StmtExpr_annotations);
     PyObject *Load_annotations = PyDict_New();
     if (!Load_annotations) return 0;
     cond = PyObject_SetAttrString(state->Load_type, "_field_types",
@@ -6177,7 +6360,8 @@ init_types(void *arg)
         "     | Expr(expr value)\n"
         "     | Pass\n"
         "     | Break\n"
-        "     | Continue");
+        "     | Continue\n"
+        "     | MacroStmt(identifier name, expr* args, identifier? importname, identifier? asname, stmt* body)");
     if (!state->stmt_type) return -1;
     if (add_attributes(state, state->stmt_type, stmt_attributes, 4) < 0) return
         -1;
@@ -6338,6 +6522,15 @@ init_types(void *arg)
                                      0,
         "Continue");
     if (!state->Continue_type) return -1;
+    state->MacroStmt_type = make_type(state, "MacroStmt", state->stmt_type,
+                                      MacroStmt_fields, 5,
+        "MacroStmt(identifier name, expr* args, identifier? importname, identifier? asname, stmt* body)");
+    if (!state->MacroStmt_type) return -1;
+    if (PyObject_SetAttr(state->MacroStmt_type, state->importname, Py_None) ==
+        -1)
+        return -1;
+    if (PyObject_SetAttr(state->MacroStmt_type, state->asname, Py_None) == -1)
+        return -1;
     state->expr_type = make_type(state, "expr", state->AST_type, NULL, 0,
         "expr = BoolOp(boolop op, expr* values)\n"
         "     | NamedExpr(expr target, expr value)\n"
@@ -6367,7 +6560,9 @@ init_types(void *arg)
         "     | Name(identifier id, expr_context ctx)\n"
         "     | List(expr* elts, expr_context ctx)\n"
         "     | Tuple(expr* elts, expr_context ctx)\n"
-        "     | Slice(expr? lower, expr? upper, expr? step)");
+        "     | Slice(expr? lower, expr? upper, expr? step)\n"
+        "     | MacroExpr(identifier name, expr* args)\n"
+        "     | StmtExpr(stmt stmt, expr value)");
     if (!state->expr_type) return -1;
     if (add_attributes(state, state->expr_type, expr_attributes, 4) < 0) return
         -1;
@@ -6513,6 +6708,14 @@ init_types(void *arg)
         return -1;
     if (PyObject_SetAttr(state->Slice_type, state->step, Py_None) == -1)
         return -1;
+    state->MacroExpr_type = make_type(state, "MacroExpr", state->expr_type,
+                                      MacroExpr_fields, 2,
+        "MacroExpr(identifier name, expr* args)");
+    if (!state->MacroExpr_type) return -1;
+    state->StmtExpr_type = make_type(state, "StmtExpr", state->expr_type,
+                                     StmtExpr_fields, 2,
+        "StmtExpr(stmt stmt, expr value)");
+    if (!state->StmtExpr_type) return -1;
     state->expr_context_type = make_type(state, "expr_context",
                                          state->AST_type, NULL, 0,
         "expr_context = Load | Store | Del");
@@ -7712,6 +7915,33 @@ _PyAST_Continue(int lineno, int col_offset, int end_lineno, int end_col_offset,
     return p;
 }
 
+stmt_ty
+_PyAST_MacroStmt(identifier name, asdl_expr_seq * args, identifier importname,
+                 identifier asname, asdl_stmt_seq * body, int lineno, int
+                 col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+{
+    stmt_ty p;
+    if (!name) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'name' is required for MacroStmt");
+        return NULL;
+    }
+    p = (stmt_ty)_PyArena_Malloc(arena, sizeof(*p));
+    if (!p)
+        return NULL;
+    p->kind = MacroStmt_kind;
+    p->v.MacroStmt.name = name;
+    p->v.MacroStmt.args = args;
+    p->v.MacroStmt.importname = importname;
+    p->v.MacroStmt.asname = asname;
+    p->v.MacroStmt.body = body;
+    p->lineno = lineno;
+    p->col_offset = col_offset;
+    p->end_lineno = end_lineno;
+    p->end_col_offset = end_col_offset;
+    return p;
+}
+
 expr_ty
 _PyAST_BoolOp(boolop_ty op, asdl_expr_seq * values, int lineno, int col_offset,
               int end_lineno, int end_col_offset, PyArena *arena)
@@ -8427,6 +8657,57 @@ _PyAST_Slice(expr_ty lower, expr_ty upper, expr_ty step, int lineno, int
     p->v.Slice.lower = lower;
     p->v.Slice.upper = upper;
     p->v.Slice.step = step;
+    p->lineno = lineno;
+    p->col_offset = col_offset;
+    p->end_lineno = end_lineno;
+    p->end_col_offset = end_col_offset;
+    return p;
+}
+
+expr_ty
+_PyAST_MacroExpr(identifier name, asdl_expr_seq * args, int lineno, int
+                 col_offset, int end_lineno, int end_col_offset, PyArena *arena)
+{
+    expr_ty p;
+    if (!name) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'name' is required for MacroExpr");
+        return NULL;
+    }
+    p = (expr_ty)_PyArena_Malloc(arena, sizeof(*p));
+    if (!p)
+        return NULL;
+    p->kind = MacroExpr_kind;
+    p->v.MacroExpr.name = name;
+    p->v.MacroExpr.args = args;
+    p->lineno = lineno;
+    p->col_offset = col_offset;
+    p->end_lineno = end_lineno;
+    p->end_col_offset = end_col_offset;
+    return p;
+}
+
+expr_ty
+_PyAST_StmtExpr(stmt_ty stmt, expr_ty value, int lineno, int col_offset, int
+                end_lineno, int end_col_offset, PyArena *arena)
+{
+    expr_ty p;
+    if (!stmt) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'stmt' is required for StmtExpr");
+        return NULL;
+    }
+    if (!value) {
+        PyErr_SetString(PyExc_ValueError,
+                        "field 'value' is required for StmtExpr");
+        return NULL;
+    }
+    p = (expr_ty)_PyArena_Malloc(arena, sizeof(*p));
+    if (!p)
+        return NULL;
+    p->kind = StmtExpr_kind;
+    p->v.StmtExpr.stmt = stmt;
+    p->v.StmtExpr.value = value;
     p->lineno = lineno;
     p->col_offset = col_offset;
     p->end_lineno = end_lineno;
@@ -9513,6 +9794,38 @@ ast2obj_stmt(struct ast_state *state, void* _o)
         result = PyType_GenericNew(tp, NULL, NULL);
         if (!result) goto failed;
         break;
+    case MacroStmt_kind:
+        tp = (PyTypeObject *)state->MacroStmt_type;
+        result = PyType_GenericNew(tp, NULL, NULL);
+        if (!result) goto failed;
+        value = ast2obj_identifier(state, o->v.MacroStmt.name);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->name, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_list(state, (asdl_seq*)o->v.MacroStmt.args,
+                             ast2obj_expr);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->args, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_identifier(state, o->v.MacroStmt.importname);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->importname, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_identifier(state, o->v.MacroStmt.asname);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->asname, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_list(state, (asdl_seq*)o->v.MacroStmt.body,
+                             ast2obj_stmt);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->body, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        break;
     }
     value = ast2obj_int(state, o->lineno);
     if (!value) goto failed;
@@ -10028,6 +10341,37 @@ ast2obj_expr(struct ast_state *state, void* _o)
         value = ast2obj_expr(state, o->v.Slice.step);
         if (!value) goto failed;
         if (PyObject_SetAttr(result, state->step, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        break;
+    case MacroExpr_kind:
+        tp = (PyTypeObject *)state->MacroExpr_type;
+        result = PyType_GenericNew(tp, NULL, NULL);
+        if (!result) goto failed;
+        value = ast2obj_identifier(state, o->v.MacroExpr.name);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->name, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_list(state, (asdl_seq*)o->v.MacroExpr.args,
+                             ast2obj_expr);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->args, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        break;
+    case StmtExpr_kind:
+        tp = (PyTypeObject *)state->StmtExpr_type;
+        result = PyType_GenericNew(tp, NULL, NULL);
+        if (!result) goto failed;
+        value = ast2obj_stmt(state, o->v.StmtExpr.stmt);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->stmt, value) == -1)
+            goto failed;
+        Py_DECREF(value);
+        value = ast2obj_expr(state, o->v.StmtExpr.value);
+        if (!value) goto failed;
+        if (PyObject_SetAttr(result, state->value, value) == -1)
             goto failed;
         Py_DECREF(value);
         break;
@@ -13795,6 +14139,150 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, PyArena*
         if (*out == NULL) goto failed;
         return 0;
     }
+    tp = state->MacroStmt_type;
+    isinstance = PyObject_IsInstance(obj, tp);
+    if (isinstance == -1) {
+        return -1;
+    }
+    if (isinstance) {
+        identifier name;
+        asdl_expr_seq* args;
+        identifier importname;
+        identifier asname;
+        asdl_stmt_seq* body;
+
+        if (PyObject_GetOptionalAttr(obj, state->name, &tmp) < 0) {
+            return -1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"name\" missing from MacroStmt");
+            return -1;
+        }
+        else {
+            int res;
+            if (_Py_EnterRecursiveCall(" while traversing 'MacroStmt' node")) {
+                goto failed;
+            }
+            res = obj2ast_identifier(state, tmp, &name, arena);
+            _Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        if (PyObject_GetOptionalAttr(obj, state->args, &tmp) < 0) {
+            return -1;
+        }
+        if (tmp == NULL) {
+            tmp = PyList_New(0);
+            if (tmp == NULL) {
+                return -1;
+            }
+        }
+        {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "MacroStmt field \"args\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            args = _Py_asdl_expr_seq_new(len, arena);
+            if (args == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                expr_ty val;
+                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                if (_Py_EnterRecursiveCall(" while traversing 'MacroStmt' node")) {
+                    goto failed;
+                }
+                res = obj2ast_expr(state, tmp2, &val, arena);
+                _Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "MacroStmt field \"args\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(args, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        if (PyObject_GetOptionalAttr(obj, state->importname, &tmp) < 0) {
+            return -1;
+        }
+        if (tmp == NULL || tmp == Py_None) {
+            Py_CLEAR(tmp);
+            importname = NULL;
+        }
+        else {
+            int res;
+            if (_Py_EnterRecursiveCall(" while traversing 'MacroStmt' node")) {
+                goto failed;
+            }
+            res = obj2ast_identifier(state, tmp, &importname, arena);
+            _Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        if (PyObject_GetOptionalAttr(obj, state->asname, &tmp) < 0) {
+            return -1;
+        }
+        if (tmp == NULL || tmp == Py_None) {
+            Py_CLEAR(tmp);
+            asname = NULL;
+        }
+        else {
+            int res;
+            if (_Py_EnterRecursiveCall(" while traversing 'MacroStmt' node")) {
+                goto failed;
+            }
+            res = obj2ast_identifier(state, tmp, &asname, arena);
+            _Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        if (PyObject_GetOptionalAttr(obj, state->body, &tmp) < 0) {
+            return -1;
+        }
+        if (tmp == NULL) {
+            tmp = PyList_New(0);
+            if (tmp == NULL) {
+                return -1;
+            }
+        }
+        {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "MacroStmt field \"body\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            body = _Py_asdl_stmt_seq_new(len, arena);
+            if (body == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                stmt_ty val;
+                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                if (_Py_EnterRecursiveCall(" while traversing 'MacroStmt' node")) {
+                    goto failed;
+                }
+                res = obj2ast_stmt(state, tmp2, &val, arena);
+                _Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "MacroStmt field \"body\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(body, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        *out = _PyAST_MacroStmt(name, args, importname, asname, body, lineno,
+                                col_offset, end_lineno, end_col_offset, arena);
+        if (*out == NULL) goto failed;
+        return 0;
+    }
 
     PyErr_Format(PyExc_TypeError, "expected some sort of stmt, but got %R", obj);
     failed:
@@ -15704,6 +16192,123 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, PyArena*
         }
         *out = _PyAST_Slice(lower, upper, step, lineno, col_offset, end_lineno,
                             end_col_offset, arena);
+        if (*out == NULL) goto failed;
+        return 0;
+    }
+    tp = state->MacroExpr_type;
+    isinstance = PyObject_IsInstance(obj, tp);
+    if (isinstance == -1) {
+        return -1;
+    }
+    if (isinstance) {
+        identifier name;
+        asdl_expr_seq* args;
+
+        if (PyObject_GetOptionalAttr(obj, state->name, &tmp) < 0) {
+            return -1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"name\" missing from MacroExpr");
+            return -1;
+        }
+        else {
+            int res;
+            if (_Py_EnterRecursiveCall(" while traversing 'MacroExpr' node")) {
+                goto failed;
+            }
+            res = obj2ast_identifier(state, tmp, &name, arena);
+            _Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        if (PyObject_GetOptionalAttr(obj, state->args, &tmp) < 0) {
+            return -1;
+        }
+        if (tmp == NULL) {
+            tmp = PyList_New(0);
+            if (tmp == NULL) {
+                return -1;
+            }
+        }
+        {
+            int res;
+            Py_ssize_t len;
+            Py_ssize_t i;
+            if (!PyList_Check(tmp)) {
+                PyErr_Format(PyExc_TypeError, "MacroExpr field \"args\" must be a list, not a %.200s", _PyType_Name(Py_TYPE(tmp)));
+                goto failed;
+            }
+            len = PyList_GET_SIZE(tmp);
+            args = _Py_asdl_expr_seq_new(len, arena);
+            if (args == NULL) goto failed;
+            for (i = 0; i < len; i++) {
+                expr_ty val;
+                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                if (_Py_EnterRecursiveCall(" while traversing 'MacroExpr' node")) {
+                    goto failed;
+                }
+                res = obj2ast_expr(state, tmp2, &val, arena);
+                _Py_LeaveRecursiveCall();
+                Py_DECREF(tmp2);
+                if (res != 0) goto failed;
+                if (len != PyList_GET_SIZE(tmp)) {
+                    PyErr_SetString(PyExc_RuntimeError, "MacroExpr field \"args\" changed size during iteration");
+                    goto failed;
+                }
+                asdl_seq_SET(args, i, val);
+            }
+            Py_CLEAR(tmp);
+        }
+        *out = _PyAST_MacroExpr(name, args, lineno, col_offset, end_lineno,
+                                end_col_offset, arena);
+        if (*out == NULL) goto failed;
+        return 0;
+    }
+    tp = state->StmtExpr_type;
+    isinstance = PyObject_IsInstance(obj, tp);
+    if (isinstance == -1) {
+        return -1;
+    }
+    if (isinstance) {
+        stmt_ty stmt;
+        expr_ty value;
+
+        if (PyObject_GetOptionalAttr(obj, state->stmt, &tmp) < 0) {
+            return -1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"stmt\" missing from StmtExpr");
+            return -1;
+        }
+        else {
+            int res;
+            if (_Py_EnterRecursiveCall(" while traversing 'StmtExpr' node")) {
+                goto failed;
+            }
+            res = obj2ast_stmt(state, tmp, &stmt, arena);
+            _Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        if (PyObject_GetOptionalAttr(obj, state->value, &tmp) < 0) {
+            return -1;
+        }
+        if (tmp == NULL) {
+            PyErr_SetString(PyExc_TypeError, "required field \"value\" missing from StmtExpr");
+            return -1;
+        }
+        else {
+            int res;
+            if (_Py_EnterRecursiveCall(" while traversing 'StmtExpr' node")) {
+                goto failed;
+            }
+            res = obj2ast_expr(state, tmp, &value, arena);
+            _Py_LeaveRecursiveCall();
+            if (res != 0) goto failed;
+            Py_CLEAR(tmp);
+        }
+        *out = _PyAST_StmtExpr(stmt, value, lineno, col_offset, end_lineno,
+                               end_col_offset, arena);
         if (*out == NULL) goto failed;
         return 0;
     }
@@ -17992,6 +18597,920 @@ obj2ast_type_param(struct ast_state *state, PyObject* obj, type_param_ty* out,
 }
 
 
+static int has_macros_mod(void *_o);
+static int has_macros_stmt(void *_o);
+static int has_macros_expr(void *_o);
+static int has_macros_comprehension(void *_o);
+static int has_macros_excepthandler(void *_o);
+static int has_macros_arguments(void *_o);
+static int has_macros_arg(void *_o);
+static int has_macros_keyword(void *_o);
+static int has_macros_alias(void *_o);
+static int has_macros_withitem(void *_o);
+static int has_macros_match_case(void *_o);
+static int has_macros_pattern(void *_o);
+static int has_macros_type_ignore(void *_o);
+static int has_macros_type_param(void *_o);
+
+static int
+has_macros_mod(void *_o)
+{
+    mod_ty o = (mod_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    switch (o->kind) {
+    case Module_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Module.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.Module.body, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Module.type_ignores); i++) {
+            if (has_macros_type_ignore(asdl_seq_GET(o->v.Module.type_ignores, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Interactive_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Interactive.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.Interactive.body, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Expression_kind:
+        if (has_macros_expr(o->v.Expression.body)) {
+            return 1;
+        }
+        break;
+    case FunctionType_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.FunctionType.argtypes); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.FunctionType.argtypes, i))) {
+                return 1;
+            }
+        }
+        if (has_macros_expr(o->v.FunctionType.returns)) {
+            return 1;
+        }
+        break;
+    }
+    return 0;
+}
+
+static int
+has_macros_stmt(void *_o)
+{
+    stmt_ty o = (stmt_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    switch (o->kind) {
+    case FunctionDef_kind:
+        if (has_macros_arguments(o->v.FunctionDef.args)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.FunctionDef.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.FunctionDef.body, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.FunctionDef.decorator_list); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.FunctionDef.decorator_list, i))) {
+                return 1;
+            }
+        }
+        if (has_macros_expr(o->v.FunctionDef.returns)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.FunctionDef.type_params); i++) {
+            if (has_macros_type_param(asdl_seq_GET(o->v.FunctionDef.type_params, i))) {
+                return 1;
+            }
+        }
+        break;
+    case AsyncFunctionDef_kind:
+        if (has_macros_arguments(o->v.AsyncFunctionDef.args)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.AsyncFunctionDef.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.AsyncFunctionDef.body, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.AsyncFunctionDef.decorator_list); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.AsyncFunctionDef.decorator_list, i))) {
+                return 1;
+            }
+        }
+        if (has_macros_expr(o->v.AsyncFunctionDef.returns)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.AsyncFunctionDef.type_params); i++) {
+            if (has_macros_type_param(asdl_seq_GET(o->v.AsyncFunctionDef.type_params, i))) {
+                return 1;
+            }
+        }
+        break;
+    case ClassDef_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.ClassDef.bases); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.ClassDef.bases, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.ClassDef.keywords); i++) {
+            if (has_macros_keyword(asdl_seq_GET(o->v.ClassDef.keywords, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.ClassDef.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.ClassDef.body, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.ClassDef.decorator_list); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.ClassDef.decorator_list, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.ClassDef.type_params); i++) {
+            if (has_macros_type_param(asdl_seq_GET(o->v.ClassDef.type_params, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Return_kind:
+        if (has_macros_expr(o->v.Return.value)) {
+            return 1;
+        }
+        break;
+    case Delete_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Delete.targets); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.Delete.targets, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Assign_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Assign.targets); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.Assign.targets, i))) {
+                return 1;
+            }
+        }
+        if (has_macros_expr(o->v.Assign.value)) {
+            return 1;
+        }
+        break;
+    case TypeAlias_kind:
+        if (has_macros_expr(o->v.TypeAlias.name)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.TypeAlias.type_params); i++) {
+            if (has_macros_type_param(asdl_seq_GET(o->v.TypeAlias.type_params, i))) {
+                return 1;
+            }
+        }
+        if (has_macros_expr(o->v.TypeAlias.value)) {
+            return 1;
+        }
+        break;
+    case AugAssign_kind:
+        if (has_macros_expr(o->v.AugAssign.target)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.AugAssign.value)) {
+            return 1;
+        }
+        break;
+    case AnnAssign_kind:
+        if (has_macros_expr(o->v.AnnAssign.target)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.AnnAssign.annotation)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.AnnAssign.value)) {
+            return 1;
+        }
+        break;
+    case For_kind:
+        if (has_macros_expr(o->v.For.target)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.For.iter)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.For.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.For.body, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.For.orelse); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.For.orelse, i))) {
+                return 1;
+            }
+        }
+        break;
+    case AsyncFor_kind:
+        if (has_macros_expr(o->v.AsyncFor.target)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.AsyncFor.iter)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.AsyncFor.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.AsyncFor.body, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.AsyncFor.orelse); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.AsyncFor.orelse, i))) {
+                return 1;
+            }
+        }
+        break;
+    case While_kind:
+        if (has_macros_expr(o->v.While.test)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.While.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.While.body, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.While.orelse); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.While.orelse, i))) {
+                return 1;
+            }
+        }
+        break;
+    case If_kind:
+        if (has_macros_expr(o->v.If.test)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.If.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.If.body, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.If.orelse); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.If.orelse, i))) {
+                return 1;
+            }
+        }
+        break;
+    case With_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.With.items); i++) {
+            if (has_macros_withitem(asdl_seq_GET(o->v.With.items, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.With.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.With.body, i))) {
+                return 1;
+            }
+        }
+        break;
+    case AsyncWith_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.AsyncWith.items); i++) {
+            if (has_macros_withitem(asdl_seq_GET(o->v.AsyncWith.items, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.AsyncWith.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.AsyncWith.body, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Match_kind:
+        if (has_macros_expr(o->v.Match.subject)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Match.cases); i++) {
+            if (has_macros_match_case(asdl_seq_GET(o->v.Match.cases, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Raise_kind:
+        if (has_macros_expr(o->v.Raise.exc)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.Raise.cause)) {
+            return 1;
+        }
+        break;
+    case Try_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Try.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.Try.body, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Try.handlers); i++) {
+            if (has_macros_excepthandler(asdl_seq_GET(o->v.Try.handlers, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Try.orelse); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.Try.orelse, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Try.finalbody); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.Try.finalbody, i))) {
+                return 1;
+            }
+        }
+        break;
+    case TryStar_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.TryStar.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.TryStar.body, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.TryStar.handlers); i++) {
+            if (has_macros_excepthandler(asdl_seq_GET(o->v.TryStar.handlers, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.TryStar.orelse); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.TryStar.orelse, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.TryStar.finalbody); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.TryStar.finalbody, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Assert_kind:
+        if (has_macros_expr(o->v.Assert.test)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.Assert.msg)) {
+            return 1;
+        }
+        break;
+    case Import_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Import.names); i++) {
+            if (has_macros_alias(asdl_seq_GET(o->v.Import.names, i))) {
+                return 1;
+            }
+        }
+        break;
+    case ImportFrom_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.ImportFrom.names); i++) {
+            if (has_macros_alias(asdl_seq_GET(o->v.ImportFrom.names, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Global_kind:
+        break;
+    case Nonlocal_kind:
+        break;
+    case Expr_kind:
+        if (has_macros_expr(o->v.Expr.value)) {
+            return 1;
+        }
+        break;
+    case Pass_kind:
+        break;
+    case Break_kind:
+        break;
+    case Continue_kind:
+        break;
+    case MacroStmt_kind:
+        return 1;
+    }
+    return 0;
+}
+
+static int
+has_macros_expr(void *_o)
+{
+    expr_ty o = (expr_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    switch (o->kind) {
+    case BoolOp_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.BoolOp.values); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.BoolOp.values, i))) {
+                return 1;
+            }
+        }
+        break;
+    case NamedExpr_kind:
+        if (has_macros_expr(o->v.NamedExpr.target)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.NamedExpr.value)) {
+            return 1;
+        }
+        break;
+    case BinOp_kind:
+        if (has_macros_expr(o->v.BinOp.left)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.BinOp.right)) {
+            return 1;
+        }
+        break;
+    case UnaryOp_kind:
+        if (has_macros_expr(o->v.UnaryOp.operand)) {
+            return 1;
+        }
+        break;
+    case Lambda_kind:
+        if (has_macros_arguments(o->v.Lambda.args)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.Lambda.body)) {
+            return 1;
+        }
+        break;
+    case IfExp_kind:
+        if (has_macros_expr(o->v.IfExp.test)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.IfExp.body)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.IfExp.orelse)) {
+            return 1;
+        }
+        break;
+    case Dict_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Dict.keys); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.Dict.keys, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Dict.values); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.Dict.values, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Set_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Set.elts); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.Set.elts, i))) {
+                return 1;
+            }
+        }
+        break;
+    case ListComp_kind:
+        if (has_macros_expr(o->v.ListComp.elt)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.ListComp.generators); i++) {
+            if (has_macros_comprehension(asdl_seq_GET(o->v.ListComp.generators, i))) {
+                return 1;
+            }
+        }
+        break;
+    case SetComp_kind:
+        if (has_macros_expr(o->v.SetComp.elt)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.SetComp.generators); i++) {
+            if (has_macros_comprehension(asdl_seq_GET(o->v.SetComp.generators, i))) {
+                return 1;
+            }
+        }
+        break;
+    case DictComp_kind:
+        if (has_macros_expr(o->v.DictComp.key)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.DictComp.value)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.DictComp.generators); i++) {
+            if (has_macros_comprehension(asdl_seq_GET(o->v.DictComp.generators, i))) {
+                return 1;
+            }
+        }
+        break;
+    case GeneratorExp_kind:
+        if (has_macros_expr(o->v.GeneratorExp.elt)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.GeneratorExp.generators); i++) {
+            if (has_macros_comprehension(asdl_seq_GET(o->v.GeneratorExp.generators, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Await_kind:
+        if (has_macros_expr(o->v.Await.value)) {
+            return 1;
+        }
+        break;
+    case Yield_kind:
+        if (has_macros_expr(o->v.Yield.value)) {
+            return 1;
+        }
+        break;
+    case YieldFrom_kind:
+        if (has_macros_expr(o->v.YieldFrom.value)) {
+            return 1;
+        }
+        break;
+    case Compare_kind:
+        if (has_macros_expr(o->v.Compare.left)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Compare.comparators); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.Compare.comparators, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Call_kind:
+        if (has_macros_expr(o->v.Call.func)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Call.args); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.Call.args, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Call.keywords); i++) {
+            if (has_macros_keyword(asdl_seq_GET(o->v.Call.keywords, i))) {
+                return 1;
+            }
+        }
+        break;
+    case FormattedValue_kind:
+        if (has_macros_expr(o->v.FormattedValue.value)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.FormattedValue.format_spec)) {
+            return 1;
+        }
+        break;
+    case Interpolation_kind:
+        if (has_macros_expr(o->v.Interpolation.value)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.Interpolation.format_spec)) {
+            return 1;
+        }
+        break;
+    case JoinedStr_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.JoinedStr.values); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.JoinedStr.values, i))) {
+                return 1;
+            }
+        }
+        break;
+    case TemplateStr_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.TemplateStr.values); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.TemplateStr.values, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Constant_kind:
+        break;
+    case Attribute_kind:
+        if (has_macros_expr(o->v.Attribute.value)) {
+            return 1;
+        }
+        break;
+    case Subscript_kind:
+        if (has_macros_expr(o->v.Subscript.value)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.Subscript.slice)) {
+            return 1;
+        }
+        break;
+    case Starred_kind:
+        if (has_macros_expr(o->v.Starred.value)) {
+            return 1;
+        }
+        break;
+    case Name_kind:
+        break;
+    case List_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.List.elts); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.List.elts, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Tuple_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.Tuple.elts); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.Tuple.elts, i))) {
+                return 1;
+            }
+        }
+        break;
+    case Slice_kind:
+        if (has_macros_expr(o->v.Slice.lower)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.Slice.upper)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.Slice.step)) {
+            return 1;
+        }
+        break;
+    case MacroExpr_kind:
+        return 1;
+    case StmtExpr_kind:
+        if (has_macros_stmt(o->v.StmtExpr.stmt)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.StmtExpr.value)) {
+            return 1;
+        }
+        break;
+    }
+    return 0;
+}
+
+static int
+has_macros_comprehension(void *_o)
+{
+    comprehension_ty o = (comprehension_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    if (has_macros_expr(o->target)) {
+        return 1;
+    }
+    if (has_macros_expr(o->iter)) {
+        return 1;
+    }
+    for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->ifs); i++) {
+        if (has_macros_expr(asdl_seq_GET(o->ifs, i))) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+has_macros_excepthandler(void *_o)
+{
+    excepthandler_ty o = (excepthandler_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    switch (o->kind) {
+    case ExceptHandler_kind:
+        if (has_macros_expr(o->v.ExceptHandler.type)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.ExceptHandler.body); i++) {
+            if (has_macros_stmt(asdl_seq_GET(o->v.ExceptHandler.body, i))) {
+                return 1;
+            }
+        }
+        break;
+    }
+    return 0;
+}
+
+static int
+has_macros_arguments(void *_o)
+{
+    arguments_ty o = (arguments_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->posonlyargs); i++) {
+        if (has_macros_arg(asdl_seq_GET(o->posonlyargs, i))) {
+            return 1;
+        }
+    }
+    for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->args); i++) {
+        if (has_macros_arg(asdl_seq_GET(o->args, i))) {
+            return 1;
+        }
+    }
+    if (has_macros_arg(o->vararg)) {
+        return 1;
+    }
+    for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->kwonlyargs); i++) {
+        if (has_macros_arg(asdl_seq_GET(o->kwonlyargs, i))) {
+            return 1;
+        }
+    }
+    for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->kw_defaults); i++) {
+        if (has_macros_expr(asdl_seq_GET(o->kw_defaults, i))) {
+            return 1;
+        }
+    }
+    if (has_macros_arg(o->kwarg)) {
+        return 1;
+    }
+    for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->defaults); i++) {
+        if (has_macros_expr(asdl_seq_GET(o->defaults, i))) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+has_macros_arg(void *_o)
+{
+    arg_ty o = (arg_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    if (has_macros_expr(o->annotation)) {
+        return 1;
+    }
+    return 0;
+}
+
+static int
+has_macros_keyword(void *_o)
+{
+    keyword_ty o = (keyword_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    if (has_macros_expr(o->value)) {
+        return 1;
+    }
+    return 0;
+}
+
+static int
+has_macros_alias(void *_o)
+{
+    alias_ty o = (alias_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    return 0;
+}
+
+static int
+has_macros_withitem(void *_o)
+{
+    withitem_ty o = (withitem_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    if (has_macros_expr(o->context_expr)) {
+        return 1;
+    }
+    if (has_macros_expr(o->optional_vars)) {
+        return 1;
+    }
+    return 0;
+}
+
+static int
+has_macros_match_case(void *_o)
+{
+    match_case_ty o = (match_case_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    if (has_macros_pattern(o->pattern)) {
+        return 1;
+    }
+    if (has_macros_expr(o->guard)) {
+        return 1;
+    }
+    for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->body); i++) {
+        if (has_macros_stmt(asdl_seq_GET(o->body, i))) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+has_macros_pattern(void *_o)
+{
+    pattern_ty o = (pattern_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    switch (o->kind) {
+    case MatchValue_kind:
+        if (has_macros_expr(o->v.MatchValue.value)) {
+            return 1;
+        }
+        break;
+    case MatchSingleton_kind:
+        break;
+    case MatchSequence_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.MatchSequence.patterns); i++) {
+            if (has_macros_pattern(asdl_seq_GET(o->v.MatchSequence.patterns, i))) {
+                return 1;
+            }
+        }
+        break;
+    case MatchMapping_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.MatchMapping.keys); i++) {
+            if (has_macros_expr(asdl_seq_GET(o->v.MatchMapping.keys, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.MatchMapping.patterns); i++) {
+            if (has_macros_pattern(asdl_seq_GET(o->v.MatchMapping.patterns, i))) {
+                return 1;
+            }
+        }
+        break;
+    case MatchClass_kind:
+        if (has_macros_expr(o->v.MatchClass.cls)) {
+            return 1;
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.MatchClass.patterns); i++) {
+            if (has_macros_pattern(asdl_seq_GET(o->v.MatchClass.patterns, i))) {
+                return 1;
+            }
+        }
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.MatchClass.kwd_patterns); i++) {
+            if (has_macros_pattern(asdl_seq_GET(o->v.MatchClass.kwd_patterns, i))) {
+                return 1;
+            }
+        }
+        break;
+    case MatchStar_kind:
+        break;
+    case MatchAs_kind:
+        if (has_macros_pattern(o->v.MatchAs.pattern)) {
+            return 1;
+        }
+        break;
+    case MatchOr_kind:
+        for (Py_ssize_t i = 0; i < asdl_seq_LEN(o->v.MatchOr.patterns); i++) {
+            if (has_macros_pattern(asdl_seq_GET(o->v.MatchOr.patterns, i))) {
+                return 1;
+            }
+        }
+        break;
+    }
+    return 0;
+}
+
+static int
+has_macros_type_ignore(void *_o)
+{
+    type_ignore_ty o = (type_ignore_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    switch (o->kind) {
+    case TypeIgnore_kind:
+        break;
+    }
+    return 0;
+}
+
+static int
+has_macros_type_param(void *_o)
+{
+    type_param_ty o = (type_param_ty)_o;
+    if (!o) {
+        return 0;
+    }
+    switch (o->kind) {
+    case TypeVar_kind:
+        if (has_macros_expr(o->v.TypeVar.bound)) {
+            return 1;
+        }
+        if (has_macros_expr(o->v.TypeVar.default_value)) {
+            return 1;
+        }
+        break;
+    case ParamSpec_kind:
+        if (has_macros_expr(o->v.ParamSpec.default_value)) {
+            return 1;
+        }
+        break;
+    case TypeVarTuple_kind:
+        if (has_macros_expr(o->v.TypeVarTuple.default_value)) {
+            return 1;
+        }
+        break;
+    }
+    return 0;
+}
+
+int
+_PyAST_HasMacros(mod_ty mod)
+{
+    return has_macros_mod(mod);
+}
+
+
 /* Helper for checking if a node class is abstract in the tests. */
 static PyObject *
 ast_is_abstract(PyObject *Py_UNUSED(module), PyObject *cls) {
@@ -18140,6 +19659,9 @@ astmodule_exec(PyObject *m)
     if (PyModule_AddObjectRef(m, "Continue", state->Continue_type) < 0) {
         return -1;
     }
+    if (PyModule_AddObjectRef(m, "MacroStmt", state->MacroStmt_type) < 0) {
+        return -1;
+    }
     if (PyModule_AddObjectRef(m, "expr", state->expr_type) < 0) {
         return -1;
     }
@@ -18231,6 +19753,12 @@ astmodule_exec(PyObject *m)
         return -1;
     }
     if (PyModule_AddObjectRef(m, "Slice", state->Slice_type) < 0) {
+        return -1;
+    }
+    if (PyModule_AddObjectRef(m, "MacroExpr", state->MacroExpr_type) < 0) {
+        return -1;
+    }
+    if (PyModule_AddObjectRef(m, "StmtExpr", state->StmtExpr_type) < 0) {
         return -1;
     }
     if (PyModule_AddObjectRef(m, "expr_context", state->expr_context_type) < 0)

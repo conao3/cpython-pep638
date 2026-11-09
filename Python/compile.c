@@ -1524,11 +1524,63 @@ _PyCompile_OptimizeAndAssemble(compiler *c, int addNone)
     return optimize_and_assemble_code_unit(u, const_cache, code_flags, filename);
 }
 
+mod_ty
+_PyCompile_ExpandMacros(mod_ty mod, PyObject *filename, PyArena *arena)
+{
+    if (!_PyAST_HasMacros(mod)) {
+        return mod;
+    }
+    int mode;
+    switch (mod->kind) {
+    case Module_kind:
+        mode = 0;
+        break;
+    case Expression_kind:
+        mode = 1;
+        break;
+    case Interactive_kind:
+        mode = 2;
+        break;
+    default:
+        PyErr_SetString(PyExc_SystemError, "unexpected module kind with macros");
+        return NULL;
+    }
+    PyObject *tree = PyAST_mod2obj(mod);
+    if (tree == NULL) {
+        return NULL;
+    }
+    PyObject *expanded = PyImport_ImportModuleAttrString("macros", "_expand");
+    if (expanded == NULL) {
+        Py_DECREF(tree);
+        return NULL;
+    }
+    PyObject *result = PyObject_CallFunctionObjArgs(expanded, tree, filename, NULL);
+    Py_DECREF(expanded);
+    Py_DECREF(tree);
+    if (result == NULL) {
+        return NULL;
+    }
+    mod_ty res = PyAST_obj2mod(result, arena, mode);
+    Py_DECREF(result);
+    if (res == NULL || !_PyAST_Validate(res)) {
+        return NULL;
+    }
+    if (_PyAST_HasMacros(res)) {
+        PyErr_SetString(PyExc_SystemError, "macros remain after expansion");
+        return NULL;
+    }
+    return res;
+}
+
 PyCodeObject *
 _PyAST_Compile(mod_ty mod, PyObject *filename, PyCompilerFlags *pflags,
                int optimize, PyArena *arena, PyObject *module)
 {
     assert(!PyErr_Occurred());
+    mod = _PyCompile_ExpandMacros(mod, filename, arena);
+    if (mod == NULL) {
+        return NULL;
+    }
     compiler *c = new_compiler(mod, filename, pflags, optimize, arena, module);
     if (c == NULL) {
         return NULL;

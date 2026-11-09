@@ -1,5 +1,6 @@
 #include "Python.h"
 #include "pycore_ast.h"           // stmt_ty
+#include "pycore_compile.h"       // _PyCompile_ExpandMacros()
 #include "pycore_parser.h"        // _PyParser_ASTFromString()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
@@ -2297,6 +2298,11 @@ symtable_visit_stmt(struct symtable *st, stmt_ty s)
     case Continue_kind:
         /* nothing to do here */
         break;
+    case MacroStmt_kind:
+        PyErr_Format(PyExc_SyntaxError, "macro %U! was not expanded",
+                     s->v.MacroStmt.name);
+        SET_ERROR_LOCATION(st->st_filename, LOCATION(s));
+        return 0;
     case With_kind: {
         ENTER_CONDITIONAL_BLOCK(st);
         VISIT_SEQ(st, withitem, s->v.With.items);
@@ -2642,6 +2648,15 @@ symtable_visit_expr(struct symtable *st, expr_ty e)
         break;
     case Constant_kind:
         /* Nothing to do here. */
+        break;
+    case MacroExpr_kind:
+        PyErr_Format(PyExc_SyntaxError, "macro %U! was not expanded",
+                     e->v.MacroExpr.name);
+        SET_ERROR_LOCATION(st->st_filename, LOCATION(e));
+        return 0;
+    case StmtExpr_kind:
+        VISIT(st, stmt, e->v.StmtExpr.stmt);
+        VISIT(st, expr, e->v.StmtExpr.value);
         break;
     /* The following exprs can be assignment targets. */
     case Attribute_kind:
@@ -3272,6 +3287,9 @@ _Py_SymtableStringObjectFlags(const char *str, PyObject *filename,
         return NULL;
 
     mod = _PyParser_ASTFromString(str, filename, start, flags, arena, module);
+    if (mod != NULL) {
+        mod = _PyCompile_ExpandMacros(mod, filename, arena);
+    }
     if (mod == NULL) {
         _PyArena_Free(arena);
         return NULL;

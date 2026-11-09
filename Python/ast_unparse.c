@@ -560,6 +560,25 @@ append_ast_keyword(PyUnicodeWriter *writer, keyword_ty kw)
 }
 
 static int
+append_ast_macro_expr(PyUnicodeWriter *writer, expr_ty e)
+{
+    bool first;
+    Py_ssize_t i;
+
+    if (PyUnicodeWriter_WriteStr(writer, e->v.MacroExpr.name) < 0) {
+        return -1;
+    }
+    APPEND_STR("!(");
+    first = true;
+    for (i = 0; i < asdl_seq_LEN(e->v.MacroExpr.args); i++) {
+        APPEND_STR_IF_NOT_FIRST(", ");
+        APPEND_EXPR((expr_ty)asdl_seq_GET(e->v.MacroExpr.args, i), PR_TEST);
+    }
+    APPEND_CHAR(')');
+    return 0;
+}
+
+static int
 append_ast_call(PyUnicodeWriter *writer, expr_ty e)
 {
     bool first;
@@ -1006,6 +1025,12 @@ append_ast_expr(PyUnicodeWriter *writer, expr_ty e, int level)
         return append_ast_tuple(writer, e, level);
     case NamedExpr_kind:
         return append_named_expr(writer, e, level);
+    case MacroExpr_kind:
+        return append_ast_macro_expr(writer, e);
+    case StmtExpr_kind:
+        PyErr_SetString(PyExc_SyntaxError,
+                        "statement expression cannot be converted to a string");
+        return -1;
     // No default so compiler emits a warning for unhandled cases
     }
     PyErr_SetString(PyExc_SystemError,

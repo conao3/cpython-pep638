@@ -964,6 +964,27 @@ class Unparser(NodeVisitor):
             else:
                 self.traverse(node.slice)
 
+    def visit_MacroStmt(self, node):
+        self.fill(f"{node.name}!", allow_semicolon=False)
+        if node.args:
+            self.write(" ")
+            self.interleave(lambda: self.write(", "), self.traverse, node.args)
+        if node.importname is not None:
+            self.write(f" import {node.importname}")
+        if node.asname is not None:
+            self.write(f" as {node.asname}")
+        if node.body:
+            with self.block():
+                self.traverse(node.body)
+
+    def visit_MacroExpr(self, node):
+        self.write(f"{node.name}!")
+        with self.delimit("(", ")"):
+            self.interleave(lambda: self.write(", "), self.traverse, node.args)
+
+    def visit_StmtExpr(self, node):
+        raise ValueError("StmtExpr has no source representation")
+
     def visit_Starred(self, node):
         self.write("*")
         self.set_precedence(_Precedence.EXPR, node.value)

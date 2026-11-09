@@ -135,6 +135,7 @@ simple_stmt[stmt_ty] (memo):
     | &'nonlocal' nonlocal_stmt
 
 compound_stmt[stmt_ty]:
+    | &NAME macro_stmt
     | &('def' | '@' | 'async') function_def
     | &'if' if_stmt
     | &('class' | '@') class_def
@@ -143,6 +144,28 @@ compound_stmt[stmt_ty]:
     | &'try' try_stmt
     | &'while' while_stmt
     | match_stmt
+
+# MACROS (PEP 638)
+# ================
+
+macro_name[identifier]:
+    | a=NAME b='!' { _PyPegen_macro_name(p, a, b) }
+
+macro_args[asdl_expr_seq*]: a[asdl_expr_seq*]=','.star_expression+ [','] { a }
+
+macro_import[identifier]: 'import' z=NAME { z->v.Name.id }
+
+macro_as[identifier]: 'as' z=NAME { z->v.Name.id }
+
+macro_stmt[stmt_ty]:
+    | n=macro_name a=[macro_args] i=[macro_import] s=[macro_as] ':' NEWLINE INDENT b=statements DEDENT {
+        _PyAST_MacroStmt(n, a, i, s, b, EXTRA) }
+    | n=macro_name a=[macro_args] i=[macro_import] s=[macro_as] [':'] NEWLINE {
+        _PyAST_MacroStmt(n, a, i, s, NULL, EXTRA) }
+
+macro_expr[expr_ty]:
+    | n=macro_name '(' a=[macro_args] ')' { _PyAST_MacroExpr(n, a, EXTRA) }
+    | invalid_macro_expr
 
 # SIMPLE STATEMENTS
 # =================
@@ -892,6 +915,7 @@ slice[expr_ty]:
     | a=named_expression { a }
 
 atom[expr_ty]:
+    | &(NAME '!') macro_expr
     | NAME
     | 'True' { _PyAST_Constant(Py_True, NULL, EXTRA) }
     | 'False' { _PyAST_Constant(Py_False, NULL, EXTRA) }
@@ -1214,6 +1238,12 @@ func_type_comment[Token*]:
 # ========================= START OF INVALID RULES =======================
 
 # From here on, there are rules for invalid syntax with specialised error messages
+invalid_macro_expr:
+    | a=NAME b='!' !('(' | NAME | '}' | ':' | '=') {
+        _PyPegen_macro_name(p, a, b)
+            ? RAISE_SYNTAX_ERROR_KNOWN_LOCATION(b, "expression macro %U! must be followed by '('", a->v.Name.id)
+            : NULL }
+
 invalid_arguments:
     | ((','.(starred_expression | ( assignment_expression | expression !':=') !'=')+ ',' kwargs) | kwargs) a=',' ','.(starred_expression !'=')+ {
         RAISE_SYNTAX_ERROR_STARTING_FROM(a, "iterable argument unpacking follows keyword argument unpacking") }

@@ -182,7 +182,11 @@ static int
 initialize_token(Parser *p, Token *parser_token, struct token *new_token, int token_type) {
     assert(parser_token != NULL);
 
-    parser_token->type = (token_type == NAME) ? _get_keyword_or_name_type(p, new_token) : token_type;
+    // PEP 638: a keyword immediately followed by '!' is a macro name
+    int is_macro_name = (token_type == NAME && !INSIDE_FSTRING(p->tok) &&
+                         new_token->end[0] == '!' && new_token->end[1] != '=');
+    parser_token->type = (token_type == NAME && !is_macro_name)
+        ? _get_keyword_or_name_type(p, new_token) : token_type;
     parser_token->bytes = PyBytes_FromStringAndSize(new_token->start, new_token->end - new_token->start);
     if (parser_token->bytes == NULL) {
         return -1;

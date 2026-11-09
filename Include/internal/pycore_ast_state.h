@@ -94,6 +94,8 @@ struct ast_state {
     PyObject *LtE_type;
     PyObject *Lt_singleton;
     PyObject *Lt_type;
+    PyObject *MacroExpr_type;
+    PyObject *MacroStmt_type;
     PyObject *MatMult_singleton;
     PyObject *MatMult_type;
     PyObject *MatchAs_type;
@@ -133,6 +135,7 @@ struct ast_state {
     PyObject *Set_type;
     PyObject *Slice_type;
     PyObject *Starred_type;
+    PyObject *StmtExpr_type;
     PyObject *Store_singleton;
     PyObject *Store_type;
     PyObject *Sub_singleton;
@@ -205,6 +208,7 @@ struct ast_state {
     PyObject *handlers;
     PyObject *id;
     PyObject *ifs;
+    PyObject *importname;
     PyObject *is_async;
     PyObject *is_lazy;
     PyObject *items;
@@ -245,6 +249,7 @@ struct ast_state {
     PyObject *simple;
     PyObject *slice;
     PyObject *step;
+    PyObject *stmt;
     PyObject *stmt_type;
     PyObject *str;
     PyObject *subject;

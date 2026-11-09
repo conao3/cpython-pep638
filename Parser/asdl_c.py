@@ -2092,6 +2092,78 @@ class ObjVisitor(PickleVisitor):
             self.emit("value = ast2obj_%s(state, %s);" % (field.type, value), depth, reflow=False)
 
 
+class HasMacrosVisitor(PickleVisitor):
+    """Emit has_macros_<type>(), which report whether a tree contains
+    MacroStmt or MacroExpr nodes (PEP 638)."""
+
+    MACRO_KINDS = ("MacroStmt", "MacroExpr")
+
+    def visitModule(self, mod):
+        for dfn in mod.dfns:
+            if isinstance(dfn.value, asdl.Product) or not is_simple(dfn.value):
+                self.emit("static int has_macros_%s(void *_o);" % dfn.name, 0)
+        self.emit("", 0)
+        for dfn in mod.dfns:
+            self.visit(dfn)
+        self.emit("int", 0)
+        self.emit("_PyAST_HasMacros(mod_ty mod)", 0)
+        self.emit("{", 0)
+        self.emit("return has_macros_mod(mod);", 1)
+        self.emit("}", 0)
+        self.emit("", 0)
+
+    def func_begin(self, name):
+        ctype = get_c_type(name)
+        self.emit("static int", 0)
+        self.emit("has_macros_%s(void *_o)" % name, 0)
+        self.emit("{", 0)
+        self.emit("%s o = (%s)_o;" % (ctype, ctype), 1)
+        self.emit("if (!o) {", 1)
+        self.emit("return 0;", 2)
+        self.emit("}", 1)
+
+    def func_end(self):
+        self.emit("return 0;", 1)
+        self.emit("}", 0)
+        self.emit("", 0)
+
+    def visitSum(self, sum, name):
+        if is_simple(sum):
+            return
+        self.func_begin(name)
+        self.emit("switch (o->kind) {", 1)
+        for t in sum.types:
+            self.emit("case %s_kind:" % t.name, 1)
+            if t.name in self.MACRO_KINDS:
+                self.emit("return 1;", 2)
+                continue
+            for f in t.fields:
+                self.visitField(f, "o->v.%s.%s" % (t.name, f.name), 2)
+            self.emit("break;", 2)
+        self.emit("}", 1)
+        self.func_end()
+
+    def visitProduct(self, prod, name):
+        self.func_begin(name)
+        for f in prod.fields:
+            self.visitField(f, "o->%s" % f.name, 1)
+        self.func_end()
+
+    def visitField(self, field, value, depth):
+        if field.type in asdl.builtin_types or field.type in self.metadata.simple_sums:
+            return
+        if field.seq:
+            self.emit("for (Py_ssize_t i = 0; i < asdl_seq_LEN(%s); i++) {" % value, depth, reflow=False)
+            self.emit("if (has_macros_%s(asdl_seq_GET(%s, i))) {" % (field.type, value), depth + 1, reflow=False)
+            self.emit("return 1;", depth + 2)
+            self.emit("}", depth + 1)
+            self.emit("}", depth)
+        else:
+            self.emit("if (has_macros_%s(%s)) {" % (field.type, value), depth, reflow=False)
+            self.emit("return 1;", depth + 1)
+            self.emit("}", depth)
+
+
 class PartingShots(StaticVisitor):
 
     CODE = """
@@ -2315,6 +2387,9 @@ def write_header(mod, metadata, f):
 
         extern int _PyAST_Validate(mod_ty);
 
+        /* Return 1 if the tree contains MacroStmt or MacroExpr nodes (PEP 638). */
+        extern int _PyAST_HasMacros(mod_ty);
+
         /* _PyAST_ExprAsUnicode is defined in ast_unparse.c */
         extern PyObject* _PyAST_ExprAsUnicode(expr_ty);
 
@@ -2368,6 +2443,7 @@ def write_source(mod, metadata, f, internal_h_file):
         FunctionVisitor(f),
         ObjVisitor(f),
         Obj2ModVisitor(f),
+        HasMacrosVisitor(f),
         ASTModuleVisitor(f),
         PartingShots(f),
         metadata=metadata

@@ -53,6 +53,11 @@ module Python
           | Expr(expr value)
           | Pass | Break | Continue
 
+          -- PEP 638 syntactic macros, replaced by their expansion before
+          -- the code is compiled
+          | MacroStmt(identifier name, expr* args, identifier? importname,
+                      identifier? asname, stmt* body)
+
           -- col_offset is the byte offset in the utf8 string the parser uses
           attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
 
@@ -93,6 +98,11 @@ module Python
 
          -- can appear only in Subscript
          | Slice(expr? lower, expr? upper, expr? step)
+
+         -- PEP 638: an expression macro, and a statement run before an
+         -- expression is evaluated
+         | MacroExpr(identifier name, expr* args)
+         | StmtExpr(stmt stmt, expr value)
 
           -- col_offset is the byte offset in the utf8 string the parser uses
           attributes (int lineno, int col_offset, int? end_lineno, int? end_col_offset)
